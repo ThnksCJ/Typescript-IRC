@@ -2,9 +2,11 @@
   "name": "irc",
   "version": "1.0.0",
   "author": "CJ Stevenson",
+  "email": "admin@cjstevenson.com",
   "license": "ISC",
   "scripts": {
-    "build&start": "tsc && node dist/index.js",
+    "start": "npm run prestart && node dist/index.js",
+    "prestart": "tsc",
     "dev": "nodemon --watch 'src/**/*.ts' --exec ts-node src/index.ts"
   },
   "devDependencies": {
