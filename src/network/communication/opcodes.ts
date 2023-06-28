@@ -1,0 +1,23 @@
+export const opcodes = {
+    // Core
+    PING: 0xC0,
+    PONG: 0xC1,
+    CONNECT: 0xC2,
+    DISCONNECT: 0xC3,
+    CHANNEL_JOIN: 0xC4,
+    CHANNEL_LEAVE: 0xC5,
+    MESSAGE_SEND: 0xC6,
+    MESSAGE_RECEIVE: 0xC7,
+    INTRODUCE: 0xC8,
+
+    // Account
+    ACCOUNT_INFO: 0xA0,
+
+    // Channel
+    CHANNELS_LIST: 0xCA0,
+    CHANNEL_INFO: 0xCA1,
+    CHANNEL_CREATE: 0xCA2,
+    CHANNEL_DELETE: 0xCA3,
+    CHANNEL_UPDATE: 0xCA4,
+    CHANNEL_MEMBER_LIST: 0xCA5,
+}
