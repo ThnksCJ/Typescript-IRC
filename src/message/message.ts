@@ -58,6 +58,20 @@ export class TextMessage {
     public toString(): string {
         return `${this.timestamp.toLocaleTimeString()} <${this.sender.identifier}> ${this.content}`;
     }
+
+    /**
+     * Get a JSON representation of the message.
+     *
+     * @returns {object} JSON representation of the message
+     */
+    public toJSON(): object {
+        return {
+            sender: this.sender.identifier,
+            recipient: this.recipient instanceof Client ? this.recipient.identifier : this.recipient.name,
+            content: this.content,
+            timestamp: this.timestamp
+        };
+    }
 }
 
 /**

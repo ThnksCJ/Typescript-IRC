@@ -7,14 +7,4 @@ export class PMChannel implements IChannel {
     id: string;
     name: string;
     server: IServer;
-
-    addClient(client: IClient): void {
-
-    }
-
-    broadcast(message: string): void {
-    }
-
-    removeClient(client: IClient): void {
-    }
 }

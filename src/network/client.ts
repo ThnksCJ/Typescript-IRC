@@ -28,6 +28,7 @@ export interface IClient {
     packetHandler: PacketHandler;
     username: string;
     identifier: string;
+    channel: IChannel | undefined;
 
     send(msg: TextMessage): void;
 
@@ -55,6 +56,27 @@ export class Client extends Transceiver implements IClient {
         this.server = server;
         this.hostname = alias !== undefined ? alias : (socket.remoteAddress !== undefined ? socket.remoteAddress : "unknown");
         this.packetHandler = new PacketHandler(this.server, this);
+    }
+
+    public _channel: IChannel | undefined;
+
+    /**
+     * Get the channel the client is in
+     *
+     * @returns {IChannel | undefined} Channel the client is in
+     */
+
+    get channel(): IChannel | undefined {
+        return this._channel;
+    }
+
+    /**
+     * Introduce the client to a channel
+     *
+     * @param channel Channel to introduce the client to. Implements {@link IChannel}
+     */
+    set channel(channel: IChannel) {
+        this._channel = channel;
     }
 
     private _username: string = "*";
@@ -110,14 +132,17 @@ export class Client extends Transceiver implements IClient {
      * @returns {Promise<void>}
      */
     public async introduce(channel: IChannel) {
-        await Promise.all(channel.clients.map(client =>
-            client.write(client.packetHandler.write(new PacketBuilder().setOpcode(opcodes.INTRODUCE).setData({
+        await Promise.all(channel.clients.map(client => {
+            if (client.identifier === this.identifier) return;
+
+            client.write(new PacketBuilder().setOpcode(opcodes.INTRODUCE).setData({
                 username: this.username,
                 identifier: this.identifier,
                 server: {
                     hostname: this.server.hostname,
                     version: this.server.version
                 }
-            }).build()).toString())));
+            }).build())
+        }));
     }
 }

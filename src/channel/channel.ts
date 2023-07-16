@@ -1,5 +1,6 @@
 import {IClient} from "../network/client";
 import {IServer} from "../network/server";
+import {Packet} from "../network/communication/packet";
 
 export interface IChannel {
     clients: IClient[];
@@ -7,9 +8,13 @@ export interface IChannel {
     name: string;
     id: string;
 
-    addClient(client: IClient): void;
+    sendPacket?(sendingClient: IClient, packet: Packet): void | Promise<void>;
 
-    removeClient(client: IClient): void;
+    sendPacketTo?(sendingClient: IClient, receivingClient: IClient, packet: Packet): void | Promise<void>;
 
-    broadcast(message: string): void;
+    addClient?(client: IClient): void | Promise<void>;
+
+    removeClient?(client: IClient): void | Promise<void>;
+
+    broadcast?(message: string): void | Promise<void>;
 }

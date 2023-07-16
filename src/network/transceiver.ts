@@ -30,5 +30,6 @@ export class Transceiver extends Pipe<string> {
 
     public async write(data: string | Packet) {
         this.socket.write((data instanceof Packet ? data.raw : data) + "\n");
+        //logger.network.debug(`Sent packet: ${data instanceof Packet ? data.raw : data}`)
     }
 }

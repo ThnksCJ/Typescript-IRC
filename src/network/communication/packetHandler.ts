@@ -3,6 +3,9 @@ import {Server} from "../server";
 import {Packet, PacketBuilder} from "./packet";
 import {opcodes} from "./opcodes";
 import {logger} from "../../global";
+import {ErrorPacket} from "./packets/core/ErrorPacket";
+import {MessagePacket} from "./packets/core/MessagePacket";
+import {TextMessage} from "../../message/message";
 
 /**
  * Handles packets between the server <-> client connection
@@ -41,12 +44,11 @@ export class PacketHandler {
     /**
      * @param {Client} client The client to send the packet to
      * @param {Packet} packet The packet to send (An object with an opcode and data)
-     * @param jsonified Whether or not the packet should be stringified before sending
      *
      * @returns {Promise<void>}
      */
-    public async writeToClient(client: Client, packet: Packet, jsonified: boolean = false) {
-        await client.write(jsonified ? JSON.stringify(packet) : packet);
+    public async writeToClient(client: Client, packet: Packet) {
+        await client.write(packet);
     }
 
     /**
@@ -71,6 +73,14 @@ export class PacketHandler {
 
                     const {username, email} = packet.data as { username: string, email: string };
 
+                    if (this._server.clients.find(client => client.username === username)) {
+                        await this.writeToClient(client, new PacketBuilder().setOpcode(opcodes.ERROR).setData({
+                            type: "account",
+                            message: "A user with that username already exists!"
+                        }).build());
+                        return;
+                    }
+
                     client.username = username;
 
                     logger.network.info(`Client (${client.username}) has identified themselves as ${username} (${email})`);
@@ -78,19 +88,64 @@ export class PacketHandler {
             }
 
             if (client.username === "*")
-                return await client.write(new PacketBuilder().setOpcode(opcodes.MESSAGE_RECEIVE).setData({
-                    type: "error",
+                return await client.write(new PacketBuilder().setOpcode(opcodes.ERROR).setData({
+                    type: "generic",
                     message: "You must identify yourself before proceeding into other parts of the IRC!"
                 }).build());
 
             switch (packet.opcode) {
-                case opcodes.PING:
+                case opcodes.CHANNELS_LIST:
+                    const channelNameAndId = this._server.channels.map(channel => {
+                        return {id: channel.id, name: channel.name}
+                    })
+
+                    await this.writeToClient(client, new PacketBuilder().setOpcode(opcodes.CHANNELS_LIST).setData(channelNameAndId).build());
                     break;
-                case opcodes.PONG:
+                case opcodes.CHANNEL_JOIN:
+                    if (!(await this.validatePacketData(packet, ["id"])))
+                        return;
+
+                    const {id} = packet.data as { id: string };
+
+                    const channel = this._server.channels.find(channel => channel.id === id);
+
+                    if (!channel) {
+                        return await client.write(new ErrorPacket({
+                            type: "channel",
+                            message: "That channel does not exist!"
+                        }));
+                    }
+
+                    for (const channel of this._server.channels) {
+                        if (channel.clients.includes(client)) {
+                            logger.network.info(`Client (${client.username}) has left channel ${channel.name}`);
+                            await channel.removeClient(client);
+                        }
+                    }
+
+                    await channel.addClient(client);
+                    logger.network.info(`Client (${client.username}) has joined channel ${channel.name}`);
+                    break;
+                case opcodes.MESSAGE_SEND:
+                    if (!(await this.validatePacketData(packet, ["message"])))
+                        return;
+
+                    const {message} = packet.data as { message: string };
+
+                    if (client.channel) {
+                        client.channel.sendPacket(client, new MessagePacket({
+                            message: new TextMessage(client, message, client.channel)
+                        }));
+                    } else {
+                        return await client.write(new ErrorPacket({
+                            type: "channel",
+                            message: "You must be in a channel to send a message!"
+                        }));
+                    }
                     break;
             }
         } catch (e) {
-            console.log(e)
+            logger.network.error(`Error while handling packet: ${e}`);
             return;
         }
     }
@@ -101,7 +156,7 @@ export class PacketHandler {
      * @param packet The packet to validate
      */
     private async validatePacket(packet: Packet) {
-        if (!packet.opcode || !packet.data) {
+        if (!packet.opcode) {
             return null;
         }
 

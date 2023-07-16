@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>IRC Client Tester</title>
+    <style>
+        /* CSS styles */
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #2e3440;
+            color: #d8dee9;
+            overflow-y: scroll;
+            overflow-x: hidden;
+        }
+
+        body::-webkit-scrollbar {
+            display: none;
+        }
+
+        h1 {
+            color: #81a1c1;
+        }
+
+        label {
+            color: #81a1c1;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+        }
+
+        .container > div {
+            margin-right: 20px;
+        }
+
+        input, textarea {
+            background-color: #3b4252;
+            color: #d8dee9;
+            border: none;
+            padding: 8px;
+            margin-bottom: 10px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 200px;
+            resize: none;
+            outline: #81a1c1;
+        }
+
+        button {
+            background-color: #5e81ac;
+            color: #eceff4;
+            border: none;
+            padding: 8px 16px;
+            margin-right: 8px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        button:disabled {
+            background-color: #4c566a;
+            cursor: default;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid #4c566a;
+            margin: 20px 0;
+        }
+
+        select {
+            background-color: #3b4252;
+            color: #d8dee9;
+            border: none;
+            padding: 8px;
+            margin-bottom: 10px;
+        }
+
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            background-color: #434c5e;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+
+        .navbar a {
+            color: #eceff4;
+            text-decoration: none;
+            margin-right: 10px;
+        }
+
+        .navbar a:hover {
+            text-decoration: underline;
+        }
+
+        .console {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #2e3440;
+            padding: 10px;
+        }
+
+        .console textarea {
+            width: 100%;
+            height: 100px;
+            resize: none;
+        }
+
+        /* Additional styles for packet creation page */
+
+        #packet-creation {
+            display: none;
+        }
+
+        #packet-creation input[type="text"] {
+            width: 100%;
+        }
+
+        #packet-creation button {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="navbar">
+    <a href="#" onclick="showMainPage()">Main</a>
+    <a href="#" onclick="showPacketSendingPage()">Packet Sending</a>
+    <a href="#" onclick="showPacketCreationPage()">Packet Creation</a>
+</div>
+<div class="container" id="main-page">
+    <div>
+        <label for="host">Host:</label>
+        <input id="host" type="text" value="localhost">
+    </div>
+    <div>
+        <label for="port">Port:</label>
+        <input id="port" type="number" value="8765">
+    </div>
+    <div>
+        <button onclick="connect()">Connect</button>
+        <button disabled onclick="disconnect()">Disconnect</button>
+    </div>
+</div>
+<div class="container" id="packet-sending-page">
+    <div>
+        <h2>Custom Packet</h2>
+        <textarea id="input" placeholder="Enter a JSON packet" style="width: 100%;height: 200px;resize: none;"></textarea>
+        <button onclick="send()">Send</button>
+    </div>
+    <div style="margin: -20px 20px;border-left:1px solid #4c566a;height:500px;"></div>
+    <div>
+        <h2>Packet Sequences</h2>
+        <div>
+            <textarea id="sequenceInput" placeholder="Enter packet sequence (one per line)"></textarea>
+            <div>
+                <input id="stepInput" min="0" step="100" type="number" value="1000">
+                <button onclick="sendSequence()">Send Sequence</button>
+                <select id="presetSelect" onchange="loadPreset()">
+                    <option value="">Select a preset</option>
+                    <option value="loginSequence">Login Sequence</option>
+                    <option value="channelJoinSequence">Channel Join Sequence</option>
+                </select>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="container" id="packet-creation-page">
+    <div>
+        <h2>Packet Creation</h2>
+        <label for="opcodeInput">Opcode:</label>
+        <select id="opcodeInput">
+        </select>
+        <label for="dataInput" style="display: block;">Data:</label>
+        <textarea id="dataInput" placeholder="Enter JSON data"></textarea>
+        <button onclick="createPacket()">Create Packet</button>
+        <button onclick="copyPacketJSON()">Copy JSON</button>
+    </div>
+    <div style="margin: -20px 20px;border-left:1px solid #4c566a;height:500px;"></div>
+    <div>
+        <h2>Packet JSON</h2>
+        <textarea id="packetJSON" readonly></textarea>
+    </div>
+</div>
+<div class="console">
+    <textarea id="console" readonly></textarea>
+</div>
+
+<script>
+    showMainPage();
+    // JavaScript code
+
+    const net = require('net');
+    let socket = null;
+    let sequence = [];
+    let step = 1000;
+    let sequenceIndex = 0;
+    let sequenceTimer = null;
+    const presets = {
+        loginSequence: [
+            {"opcode": 0xA0, "data": {"username": "Thnks_CJ", "email": "admin@cjstevenson.com"}} // Login
+        ],
+        channelJoinSequence: [
+            {"opcode": 0xCA0}, // List Channels
+            {"opcode": 0xC4, "data": {"id": "General"}} // Join Channel
+        ]
+    };
+    const opcodes = {
+        // Core
+        ERROR: 0xC1,
+        CONNECT: 0xC2,
+        DISCONNECT: 0xC3,
+        MESSAGE_SEND: 0xC6,
+        MESSAGE_RECEIVE: 0xC7,
+        INTRODUCE: 0xC8,
+
+        // Account
+        ACCOUNT_INFO: 0xA0,
+
+        // Channel
+        CHANNEL_JOIN: 0xCA0,
+        CHANNEL_LEAVE: 0xCA1,
+        CHANNELS_LIST: 0xCA2,
+        CHANNEL_INFO: 0xCA3,
+        CHANNEL_CREATE: 0xCA4,
+        CHANNEL_DELETE: 0xCA5,
+        CHANNEL_UPDATE: 0xCA6,
+        CHANNEL_MEMBER_LIST: 0xCA7,
+    }
+
+    for (let opcode in opcodes) {
+        let option = document.createElement('option');
+        option.value = opcodes[opcode];
+        option.innerText = opcode;
+        document.getElementById('opcodeInput').appendChild(option);
+    }
+
+    // Function to show the main page
+    function showMainPage() {
+        document.getElementById('main-page').style.display = 'flex';
+        document.getElementById('packet-sending-page').style.display = 'none';
+        document.getElementById('packet-creation-page').style.display = 'none';
+    }
+
+    // Function to show the packet sending page
+    function showPacketSendingPage() {
+        document.getElementById('main-page').style.display = 'none';
+        document.getElementById('packet-sending-page').style.display = 'flex';
+        document.getElementById('packet-creation-page').style.display = 'none';
+    }
+
+    // Function to show the packet creation page
+    function showPacketCreationPage() {
+        document.getElementById('main-page').style.display = 'none';
+        document.getElementById('packet-sending-page').style.display = 'none';
+        document.getElementById('packet-creation-page').style.display = 'flex';
+    }
+
+    // Function to connect to the server
+    function connect() {
+        const host = document.getElementById('host').value;
+        const port = document.getElementById('port').value;
+
+        socket = net.createConnection(port, host, () => {
+            logMessage('Connected to server');
+            enableDisconnectButton();
+            disableConnectButton();
+        });
+
+        socket.on('data', (data) => {
+            const message = data.toString().trim();
+            logMessage(`Received: ${message}`);
+        });
+
+        socket.on('close', () => {
+            logMessage('Connection closed');
+            disableDisconnectButton();
+            enableConnectButton();
+            clearSequence();
+        });
+
+        socket.on('error', (error) => {
+            logMessage(`Error: ${error.message}`);
+        });
+    }
+
+    // Function to disconnect from the server
+    function disconnect() {
+        if (socket) {
+            socket.end();
+            logMessage(`Disconnected from server`);
+        }
+
+        disableDisconnectButton();
+        enableConnectButton();
+    }
+
+    // Function to enable the disconnect button
+    function enableDisconnectButton() {
+        const disconnectButton = document.querySelector('button[onclick="disconnect()"]');
+        disconnectButton.disabled = false;
+    }
+
+    // Function to disable the disconnect button
+    function disableDisconnectButton() {
+        const disconnectButton = document.querySelector('button[onclick="disconnect()"]');
+        disconnectButton.disabled = true;
+    }
+
+    // Function to enable the connect button
+    function enableConnectButton() {
+        const connectButton = document.querySelector('button[onclick="connect()"]');
+        connectButton.disabled = false;
+    }
+
+    // Function to disable the connect button
+    function disableConnectButton() {
+        const connectButton = document.querySelector('button[onclick="connect()"]');
+        connectButton.disabled = true;
+    }
+
+    // Function to send a single packet
+    function send() {
+        const message = document.getElementById('input').value;
+        if (socket) {
+            socket.write(message);
+            logMessage(`Sent: ${message}`);
+        }
+    }
+
+    // Function to send a sequence of packets
+    function sendSequence() {
+        const sequenceInput = document.getElementById('sequenceInput');
+        const stepInput = document.getElementById('stepInput');
+        const sequenceData = sequenceInput.value.trim().split('\n');
+        const newStep = parseInt(stepInput.value);
+
+        if (sequenceData.length === 0) {
+            logMessage('No sequence entered');
+            return;
+        }
+
+        if (isNaN(newStep) || newStep < 0) {
+            logMessage('Invalid step value');
+            return;
+        }
+
+        if (!socket) {
+            logMessage('Not connected to server');
+            return;
+        }
+
+        sequence = sequenceData;
+        step = newStep;
+        sequenceIndex = 0;
+        startSequence();
+    }
+
+    // Function to start the packet sending sequence
+    function startSequence() {
+        if (sequenceTimer) {
+            clearInterval(sequenceTimer);
+        }
+
+        sequenceTimer = setInterval(sendNextPacket, step);
+        sendNextPacket();
+    }
+
+    // Function to send the next packet in the sequence
+    function sendNextPacket() {
+        if (sequenceIndex >= sequence.length) {
+            stopSequence();
+            return;
+        }
+
+        const packet = sequence[sequenceIndex];
+        socket.write(packet);
+        logMessage(`Sent: ${JSON.parse(packet)["opcode"]}`);
+        sequenceIndex++;
+    }
+
+    // Function to stop the packet sending sequence
+    function stopSequence() {
+        clearInterval(sequenceTimer);
+    }
+
+    // Function to clear the packet sequence
+    function clearSequence() {
+        sequence = [];
+        sequenceIndex = 0;
+        if (sequenceTimer) {
+            clearInterval(sequenceTimer);
+        }
+    }
+
+    // Function to load a preset packet sequence
+    function loadPreset() {
+        const presetSelect = document.getElementById('presetSelect');
+        const presetValue = presetSelect.value;
+        const presetSequence = presets[presetValue];
+
+        if (presetValue && presetSequence) {
+            const sequenceInput = document.getElementById('sequenceInput');
+            sequenceInput.value = presetSequence.map(packet => JSON.stringify(packet)).join('\n');
+        }
+    }
+
+    // Function to create a packet
+    function createPacket() {
+        const opcodeInput = document.getElementById('opcodeInput');
+        const dataInput = document.getElementById('dataInput');
+        const packetJSON = document.getElementById('packetJSON');
+        const opcode = parseInt(opcodeInput.value);
+
+        if (isNaN(opcode) || opcode < 0) {
+            logMessage('Invalid opcode value');
+            return;
+        }
+
+        let packet = {
+            opcode: opcode
+        };
+
+        if (dataInput.value) {
+            packet = {
+                ...packet,
+                data: {
+                    ...JSON.parse(dataInput.value)
+                }
+            };
+        }
+
+        packetJSON.value = JSON.stringify(packet);
+    }
+
+    // Function to copy the packet JSON to the clipboard
+    function copyPacketJSON() {
+        const packetJSON = document.getElementById('packetJSON');
+        packetJSON.select();
+        document.execCommand('copy');
+        logMessage('Packet JSON copied to clipboard');
+    }
+
+    // Function to log a message in the console
+    function logMessage(message) {
+        const consoleTextArea = document.getElementById('console');
+        consoleTextArea.value += `${message}\n`;
+        consoleTextArea.scrollTop = consoleTextArea.scrollHeight;
+    }
+</script>
+</body>
+</html>

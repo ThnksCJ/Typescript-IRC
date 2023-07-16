@@ -3,6 +3,7 @@ import {Client, IClient} from "./client";
 import {IChannel} from "../channel/channel";
 import {logger} from "../global"
 import {PacketHandler} from "./communication/packetHandler";
+import {RoomChannel} from "../channel/impl/room";
 
 export interface IServer<T extends IClient = IClient, K extends IChannel = IChannel> {
     port: number;
@@ -40,6 +41,8 @@ export class Server implements IServer {
         this.created = new Date();
         this.packetHandler = new PacketHandler(this);
 
+        this.channels.push(new RoomChannel("Lobby", this));
+
         this.server.on("connection", this.onConnection.bind(this));
         this.server.on("close", this.resolve.bind(this));
     }
@@ -47,6 +50,7 @@ export class Server implements IServer {
     public async onConnection(socket: Socket) {
         const client = new Client(this, socket, "localhost");
         this.clients.push(client);
+        logger.server.info(`${client.identifier} connected.`);
 
         await client.observe().subscribe(data => this.packetHandler.handle(data, client));
 
@@ -78,5 +82,6 @@ export class Server implements IServer {
     /**
      * A promise that resolves when the server is closed.
      */
-    private resolve: () => void = () => {};
+    private resolve: () => void = () => {
+    };
 }

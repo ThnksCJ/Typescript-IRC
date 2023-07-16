@@ -64,9 +64,11 @@ export class PacketBuilder {
         try {
             const packet = JSON.parse(json);
             this.opcode = packet.opcode;
-            this.data = packet.data;
+            if (packet.data)
+                this.data = packet.data;
             return this;
         } catch (e) {
+            console.log(e)
             return this;
         }
     }
