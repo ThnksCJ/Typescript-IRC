@@ -16,6 +16,6 @@ To start the server in development mode, run the following command:
 
 ## Contributing
 Pull requests are welcome but keep in mind this is nowhere near done. 
-Almost nothing is final and I expect everything to changeFor major changes, 
+Almost nothing is final and I expect everything to change. For major changes, 
 please open an issue first to discuss what you would like to change.
 
